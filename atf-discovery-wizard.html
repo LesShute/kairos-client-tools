@@ -375,6 +375,22 @@
             }
         ];
 
+        // Check for saved progress on page load and show resume notice
+        (function checkSavedProgress() {
+            const saved = localStorage.getItem('atf_discovery_responses');
+            if (saved) {
+                const data = JSON.parse(saved);
+                const count = Object.values(data).filter(v => v && v.trim() !== '').length;
+                if (count > 0) {
+                    const notice = document.createElement('p');
+                    notice.style.cssText = 'color: #2e7d32; background: #e8f5e9; border: 1px solid #2e7d32; border-radius: 6px; padding: 10px; margin-bottom: 15px; font-size: 14px;';
+                    notice.textContent = '\u2713 Saved progress found (' + count + ' answers). Enter your access code to continue where you left off.';
+                    const form = document.querySelector('.auth-form');
+                    form.insertBefore(notice, form.firstChild);
+                }
+            }
+        })();
+
         // Load saved progress
         function loadProgress() {
             const saved = localStorage.getItem('atf_discovery_responses');
@@ -518,9 +534,9 @@
             
             document.getElementById('completionStats').innerHTML = `
                 <strong>${answeredQuestions} of ${totalQuestions} questions answered</strong><br>
-                🔴 Critical: ${criticalAnswered}/21 &nbsp;
-                🟡 Important: ${importantAnswered}/20 &nbsp;
-                🟢 Helpful: ${helpfulAnswered}/21
+                🔴 Critical: ${criticalAnswered}/${sections[0].questions.length} &nbsp;
+                🟡 Important: ${importantAnswered}/${sections[1].questions.length} &nbsp;
+                🟢 Helpful: ${helpfulAnswered}/${sections[2].questions.length}
             `;
         }
 
@@ -549,8 +565,18 @@
                 });
             });
             
-            navigator.clipboard.writeText(text);
-            alert('✓ Responses copied to clipboard! Paste into your email to send to Kairos Kinetics.');
+            navigator.clipboard.writeText(text).then(() => {
+                alert('\u2713 Responses copied to clipboard!\n\nPaste into a new email and send to:\nles@kairoskinetics.com');
+            }).catch(() => {
+                // Fallback for browsers that block clipboard
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('\u2713 Responses copied to clipboard!\n\nPaste into a new email and send to:\nles@kairoskinetics.com');
+            });
         }
 
         function exportPrint() {
