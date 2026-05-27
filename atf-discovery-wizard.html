@@ -253,6 +253,26 @@
             font-size: 15px;
         }
         .restore-btn-yes:hover, .restore-btn-no:hover { opacity: 0.85; }
+        .cloud-restore-btn {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            background: #f0f4ff;
+            color: #3c4a9e;
+            border: 2px solid #c5cff7;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .cloud-restore-btn:hover { background: #e0e7ff; }
+        .cloud-restore-btn:disabled { opacity: 0.6; cursor: default; }
+        .cloud-restore-success {
+            background: #e8f5e9 !important;
+            color: #2e7d32 !important;
+            border-color: #a5d6a7 !important;
+        }
         @media (max-width: 768px) {
             .button-group { flex-direction: column; }
             .section-nav { flex-direction: column; }
@@ -282,6 +302,7 @@
                 <div class="auth-form">
                     <h2 style="margin-bottom: 20px;">Enter Access Code</h2>
                     <p style="color: #657786; margin-bottom: 20px;">This discovery wizard is password-protected. Enter the access code provided by Kairos Kinetics.</p>
+                    <button class="cloud-restore-btn" id="loadCloudBtn" onclick="loadCloudSession()">☁️ Load previous session</button>
                     <input type="password" id="passwordInput" placeholder="Enter access code" />
                     <button onclick="authenticate()">Access Wizard</button>
                     <div class="error" id="authError"></div>
@@ -473,31 +494,39 @@
             debouncedSync();
         }
 
-        // Cloud restore
-        let cloudRestoreData = null;
+        // Cloud restore (pre-auth, explicit button on auth screen)
+        let pendingCloudData = null;
 
-        function checkCloudRestore() {
-            const localAnswerCount = Object.keys(responses).length;
-            fetch(SHEETS_URL + '?action=getLatest', { redirect: 'follow' })
+        function loadCloudSession() {
+            const btn = document.getElementById('loadCloudBtn');
+            btn.textContent = '⌛ Checking…';
+            btn.disabled = true;
+            fetch(SHEETS_URL + '?action=getLatest')
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    if (data.success && data.responses && data.answersCount > 0) {
-                        // Only show cloud banner if cloud has MORE answers than localStorage
-                        if (data.answersCount > localAnswerCount) {
-                            cloudRestoreData = data.responses;
-                            const ts = new Date(data.timestamp);
-                            const timeStr = ts.toLocaleDateString('en-US', {month:'short', day:'numeric'}) +
-                                ' at ' + ts.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
-                            document.getElementById('restoreBannerText').textContent =
-                                data.answersCount + ' answer' + (data.answersCount !== 1 ? 's' : '') +
-                                ' saved on ' + timeStr + '. Pick up where you left off?';
-                            document.getElementById('restoreBanner').style.display = 'block';
-                        }
-                        // If cloud has same or fewer answers, localStorage is already correct — do nothing
+                    if (data.success && data.answersCount > 0) {
+                        pendingCloudData = data.responses;
+                        const ts = new Date(data.timestamp);
+                        const timeStr = ts.toLocaleDateString('en-US', {month:'short', day:'numeric'}) +
+                            ' at ' + ts.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+                        btn.textContent = '✓ Found ' + data.answersCount + ' saved answer' +
+                            (data.answersCount !== 1 ? 's' : '') + ' from ' + timeStr + '. Sign in to restore.';
+                        btn.classList.add('cloud-restore-success');
+                    } else {
+                        btn.textContent = 'No saved session found';
+                        btn.disabled = false;
                     }
                 })
-                .catch(function() { /* no cloud data, no problem */ });
+                .catch(function() {
+                    btn.textContent = '⚠️ Could not connect. Try again.';
+                    btn.disabled = false;
+                });
         }
+
+        // Post-auth in-session cloud banner (fallback for in-session resumes)
+        let cloudRestoreData = null;
+
+        function checkCloudRestore() { /* retired — replaced by pre-auth loadCloudSession */ }
 
         function restoreFromCloud() {
             if (cloudRestoreData) {
@@ -511,10 +540,8 @@
         }
 
         function dismissRestore() {
-            // "No, start fresh" = ignore cloud, keep what's in localStorage (already loaded)
             cloudRestoreData = null;
             document.getElementById('restoreBanner').style.display = 'none';
-            // Don't wipe responses or localStorage — wizard already rendered with them
         }
 
         // Authentication
@@ -523,8 +550,13 @@
             if (input === PASSWORD) {
                 document.getElementById('authScreen').classList.remove('active');
                 document.getElementById('sectionScreen').classList.add('active');
-                loadProgress();
-                checkCloudRestore();
+                // Use cloud data if loaded, otherwise fall back to localStorage
+                if (pendingCloudData) {
+                    responses = pendingCloudData;
+                    localStorage.setItem('atf_discovery_responses', JSON.stringify(responses));
+                } else {
+                    loadProgress();
+                }
                 initWizard();
             } else {
                 document.getElementById('authError').textContent = 'Invalid access code';
