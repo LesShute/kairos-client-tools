@@ -220,6 +220,39 @@
             margin-bottom: 20px;
         }
         .completion-summary h3 { color: #2e7d32; margin-bottom: 10px; }
+        .restore-banner {
+            display: none;
+            background: #e8f0fe;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .restore-banner h3 { color: #3c4a9e; margin-bottom: 8px; }
+        .restore-banner p { color: #555; margin-bottom: 16px; font-size: 14px; }
+        .restore-btn-group { display: flex; gap: 12px; justify-content: center; }
+        .restore-btn-yes {
+            padding: 10px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 15px;
+        }
+        .restore-btn-no {
+            padding: 10px 24px;
+            background: #f7f9fc;
+            color: #657786;
+            border: 2px solid #e1e8ed;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 15px;
+        }
+        .restore-btn-yes:hover, .restore-btn-no:hover { opacity: 0.85; }
         @media (max-width: 768px) {
             .button-group { flex-direction: column; }
             .section-nav { flex-direction: column; }
@@ -252,6 +285,16 @@
                     <input type="password" id="passwordInput" placeholder="Enter access code" />
                     <button onclick="authenticate()">Access Wizard</button>
                     <div class="error" id="authError"></div>
+                </div>
+            </div>
+
+            <!-- Cloud Restore Banner -->
+            <div class="restore-banner" id="restoreBanner">
+                <h3>☁️ Previous session found</h3>
+                <p id="restoreBannerText">Loading...</p>
+                <div class="restore-btn-group">
+                    <button class="restore-btn-yes" onclick="restoreFromCloud()">Yes, restore my answers</button>
+                    <button class="restore-btn-no" onclick="dismissRestore()">No, start fresh</button>
                 </div>
             </div>
 
@@ -430,6 +473,46 @@
             debouncedSync();
         }
 
+        // Cloud restore
+        let cloudRestoreData = null;
+
+        function checkCloudRestore() {
+            fetch(SHEETS_URL + '?action=getLatest', { redirect: 'follow' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.success && data.responses && data.answersCount > 0) {
+                        cloudRestoreData = data.responses;
+                        const ts = new Date(data.timestamp);
+                        const timeStr = ts.toLocaleDateString('en-US', {month:'short', day:'numeric'}) +
+                            ' at ' + ts.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+                        document.getElementById('restoreBannerText').textContent =
+                            data.answersCount + ' answer' + (data.answersCount !== 1 ? 's' : '') +
+                            ' saved on ' + timeStr + '. Pick up where you left off?';
+                        document.getElementById('restoreBanner').style.display = 'block';
+                    }
+                })
+                .catch(function() { /* no cloud data available, no problem */ });
+        }
+
+        function restoreFromCloud() {
+            if (cloudRestoreData) {
+                responses = cloudRestoreData;
+                localStorage.setItem('atf_discovery_responses', JSON.stringify(responses));
+            }
+            document.getElementById('restoreBanner').style.display = 'none';
+            initWizard();
+            updateProgress();
+            renderSectionNav();
+        }
+
+        function dismissRestore() {
+            cloudRestoreData = null;
+            responses = {};
+            localStorage.removeItem('atf_discovery_responses');
+            document.getElementById('restoreBanner').style.display = 'none';
+            initWizard();
+        }
+
         // Authentication
         function authenticate() {
             const input = document.getElementById('passwordInput').value;
@@ -437,6 +520,7 @@
                 document.getElementById('authScreen').classList.remove('active');
                 document.getElementById('sectionScreen').classList.add('active');
                 loadProgress();
+                checkCloudRestore();
                 initWizard();
             } else {
                 document.getElementById('authError').textContent = 'Invalid access code';
