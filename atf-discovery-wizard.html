@@ -477,21 +477,26 @@
         let cloudRestoreData = null;
 
         function checkCloudRestore() {
+            const localAnswerCount = Object.keys(responses).length;
             fetch(SHEETS_URL + '?action=getLatest', { redirect: 'follow' })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (data.success && data.responses && data.answersCount > 0) {
-                        cloudRestoreData = data.responses;
-                        const ts = new Date(data.timestamp);
-                        const timeStr = ts.toLocaleDateString('en-US', {month:'short', day:'numeric'}) +
-                            ' at ' + ts.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
-                        document.getElementById('restoreBannerText').textContent =
-                            data.answersCount + ' answer' + (data.answersCount !== 1 ? 's' : '') +
-                            ' saved on ' + timeStr + '. Pick up where you left off?';
-                        document.getElementById('restoreBanner').style.display = 'block';
+                        // Only show cloud banner if cloud has MORE answers than localStorage
+                        if (data.answersCount > localAnswerCount) {
+                            cloudRestoreData = data.responses;
+                            const ts = new Date(data.timestamp);
+                            const timeStr = ts.toLocaleDateString('en-US', {month:'short', day:'numeric'}) +
+                                ' at ' + ts.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+                            document.getElementById('restoreBannerText').textContent =
+                                data.answersCount + ' answer' + (data.answersCount !== 1 ? 's' : '') +
+                                ' saved on ' + timeStr + '. Pick up where you left off?';
+                            document.getElementById('restoreBanner').style.display = 'block';
+                        }
+                        // If cloud has same or fewer answers, localStorage is already correct — do nothing
                     }
                 })
-                .catch(function() { /* no cloud data available, no problem */ });
+                .catch(function() { /* no cloud data, no problem */ });
         }
 
         function restoreFromCloud() {
@@ -506,11 +511,10 @@
         }
 
         function dismissRestore() {
+            // "No, start fresh" = ignore cloud, keep what's in localStorage (already loaded)
             cloudRestoreData = null;
-            responses = {};
-            localStorage.removeItem('atf_discovery_responses');
             document.getElementById('restoreBanner').style.display = 'none';
-            initWizard();
+            // Don't wipe responses or localStorage — wizard already rendered with them
         }
 
         // Authentication
