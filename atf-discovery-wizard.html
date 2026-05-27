@@ -399,29 +399,35 @@
             }
         }
 
-        // Google Sheets sync — URL injected after Apps Script deployment
+        // Google Sheets sync
         const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyWIKxwySbrIoo0z0Djsal3Wwj8fupoufWJ4PJWQ2UgrCwXWfp-j2LcC7QiK7u0i1s/exec';
+        let syncTimer = null;
 
         function syncToSheets() {
             if (!SHEETS_URL || SHEETS_URL === 'PLACEHOLDER') return;
-            const data = {
-                client: 'ATF Medical',
-                syncedAt: new Date().toISOString(),
-                answersCount: Object.keys(responses).length,
-                responses: responses
-            };
+            if (Object.keys(responses).length === 0) return; // don't sync empty state
             fetch(SHEETS_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
+                body: JSON.stringify({
+                    client: 'ATF Medical',
+                    syncedAt: new Date().toISOString(),
+                    answersCount: Object.keys(responses).length,
+                    responses: responses
+                })
             }).catch(function() { /* fail silently */ });
         }
 
-        // Save progress
+        function debouncedSync() {
+            clearTimeout(syncTimer);
+            syncTimer = setTimeout(syncToSheets, 2000); // fire 2s after last keystroke
+        }
+
+        // Save progress (localStorage + debounced sheets sync)
         function saveProgress() {
             localStorage.setItem('atf_discovery_responses', JSON.stringify(responses));
-            syncToSheets();
+            debouncedSync();
         }
 
         // Authentication
@@ -609,8 +615,11 @@
             renderSection(0);
         }
 
-        // Auto-save + sync every 30 seconds
-        setInterval(saveProgress, 30000);
+        // Auto-save every 30 seconds (direct sync, not debounced)
+        setInterval(function() {
+            localStorage.setItem('atf_discovery_responses', JSON.stringify(responses));
+            syncToSheets();
+        }, 30000);
     </script>
 </body>
 </html>
