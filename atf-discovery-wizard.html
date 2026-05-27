@@ -399,9 +399,29 @@
             }
         }
 
+        // Google Sheets sync — URL injected after Apps Script deployment
+        const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyWIKxwySbrIoo0z0Djsal3Wwj8fupoufWJ4PJWQ2UgrCwXWfp-j2LcC7QiK7u0i1s/exec';
+
+        function syncToSheets() {
+            if (!SHEETS_URL || SHEETS_URL === 'PLACEHOLDER') return;
+            const data = {
+                client: 'ATF Medical',
+                syncedAt: new Date().toISOString(),
+                answersCount: Object.keys(responses).length,
+                responses: responses
+            };
+            fetch(SHEETS_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            }).catch(function() { /* fail silently */ });
+        }
+
         // Save progress
         function saveProgress() {
             localStorage.setItem('atf_discovery_responses', JSON.stringify(responses));
+            syncToSheets();
         }
 
         // Authentication
@@ -589,7 +609,7 @@
             renderSection(0);
         }
 
-        // Auto-save every 30 seconds
+        // Auto-save + sync every 30 seconds
         setInterval(saveProgress, 30000);
     </script>
 </body>
